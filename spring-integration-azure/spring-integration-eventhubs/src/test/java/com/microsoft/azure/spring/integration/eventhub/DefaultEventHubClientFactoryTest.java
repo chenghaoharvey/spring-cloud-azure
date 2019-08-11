@@ -55,7 +55,7 @@ public class DefaultEventHubClientFactoryTest {
 
     @Mock
     EventHubConnectionStringProvider connectionStringProvider;
-    
+
     @Mock
     StorageConnectionStringProvider storageConnectionStringProvider;
 
