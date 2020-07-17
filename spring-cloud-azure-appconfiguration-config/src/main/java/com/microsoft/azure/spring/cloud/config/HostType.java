@@ -8,11 +8,12 @@ package com.microsoft.azure.spring.cloud.config;
 /**
  * The Types of Hosts checked in request tracing.
  */
-enum HostType {
+public enum HostType {
     
-    NONE("None"),
+    UNIDENTIFIED(""),
     AZURE_WEB_APP("AzureWebApp"),
-    AZURE_FUNCTION("AzureFunction");
+    AZURE_FUNCTION("AzureFunction"),
+    KUBERNETES("Kubernetes");
     
     private final String text;
     

@@ -6,36 +6,69 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.microsoft.azure</groupId>
     <artifactId>spring-cloud-azure-dependencies</artifactId>
-    <version>1.1.0-SNAPSHOT</version>
+    <version>1.2.8-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>Spring Cloud Azure dependencies BOM</name>
     <description>BOM for Spring Cloud Azure dependencies</description>
+    <url>https://github.com/microsoft/spring-cloud-azure</url>
 
-    <parent>
-        <groupId>org.springframework.cloud</groupId>
-        <artifactId>spring-cloud-dependencies-parent</artifactId>
-        <version>2.1.0.RC3</version>
-        <relativePath/>
-    </parent>
+    <licenses>
+        <license>
+            <name>MIT</name>
+            <url>https://github.com/microsoft/spring-cloud-azure/blob/master/LICENSE.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>XiaoluDai</id>
+            <name>Xiaolu Dai</name>
+            <email>xiada@microsoft.com</email>
+        </developer>
+
+        <developer>
+            <id>ZhouLiu</id>
+            <name>Zhou Liu</name>
+            <email>liuzhou@microsoft.com</email>
+        </developer>
+    </developers>
+
+    <organization>
+        <name>Microsoft</name>
+        <url>https://www.microsoft.com</url>
+    </organization>
+
+    <scm>
+        <connection>scm:git:git://github.com/Microsoft/spring-cloud-azure.git</connection>
+        <developerConnection>scm:git:ssh://github.com:Microsoft/spring-cloud-azure.git</developerConnection>
+        <url>https://github.com/Microsoft/spring-cloud-azure/tree/master</url>
+    </scm>
 
     <properties>
         <powermock.version>1.7.1</powermock.version>
         <mockito.version>2.8.9</mockito.version>
-        <spring.cloud.version>Greenwich.RELEASE</spring.cloud.version>
-        <spring.boot.version>2.1.2.RELEASE</spring.boot.version>
+        <spring.cloud.version>Hoxton.RELEASE</spring.cloud.version>
+        <spring.boot.version>2.2.5.RELEASE</spring.boot.version>
+        <spring.cloud.azure.version>1.2.8-SNAPSHOT</spring.cloud.azure.version>
         <commons.io.version>2.6</commons.io.version>
-        <hibernate.validator.version>6.0.12.Final</hibernate.validator.version>
-        <google.guava.version>20.0</google.guava.version>
-        <azure.sdk.version>1.14.0</azure.sdk.version>
-        <azure.eventhubs.eph.version>2.4.0</azure.eventhubs.eph.version>
+        <hibernate.validator.version>6.1.0.Final</hibernate.validator.version>
+        <google.guava.version>24.1.1-jre</google.guava.version>
+        <azure.sdk.version>1.33.0</azure.sdk.version>
+        <azure.eventhubs.version>5.1.1</azure.eventhubs.version>
+        <azure.eventhubs.checkpoint.store.version>1.1.1</azure.eventhubs.checkpoint.store.version>
+        <azure.storage.blob.version>12.5.0</azure.storage.blob.version>
+        <azure.storage.file.version>12.3.0</azure.storage.file.version>
+        <azure.storage.queue.version>12.4.0</azure.storage.queue.version>
         <azure.keyvault.version>1.0.0</azure.keyvault.version>
-        <azure.client.version>1.6.0</azure.client.version>
-        <azure.servicebus.version>1.2.8</azure.servicebus.version>
+        <azure.servicebus.version>3.1.1</azure.servicebus.version>
         <javax.jms-api.version>2.0.1</javax.jms-api.version>
-        <spring-jms.version>5.1.8.RELEASE</spring-jms.version>
-        <qpid-jms-client.version>0.43.0</qpid-jms-client.version>
-
-        <spring.cloud.azure.version>1.1.0-SNAPSHOT</spring.cloud.azure.version>
+        <qpid-jms-client.version>0.43.0</qpid-jms-client.version>        
+		<azure-core.version>1.5.1</azure-core.version>
+		<azure-data-appconfiguration.version>1.1.0</azure-data-appconfiguration.version>
+		<azure-identity.version>1.0.4</azure-identity.version>
+		<azure-security-keyvault-secrets.version>4.1.1</azure-security-keyvault-secrets.version>
+		<azure-core-http-netty.version>1.5.2</azure-core-http-netty.version>
     </properties>
 
     <dependencyManagement>
@@ -144,10 +177,19 @@
             </dependency>
             <dependency>
                 <groupId>com.microsoft.azure</groupId>
+                <artifactId>spring-cloud-azure-appconfiguration-config-web</artifactId>
+                <version>${spring.cloud.azure.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.microsoft.azure</groupId>
                 <artifactId>spring-cloud-azure-messaging</artifactId>
                 <version>${spring.cloud.azure.version}</version>
             </dependency>
-
+            <dependency>
+                <groupId>com.microsoft.azure</groupId>
+                <artifactId>spring-cloud-azure-telemetry</artifactId>
+                <version>${spring.cloud.azure.version}</version>
+            </dependency>
             <!--Azure Java SDKs-->
             <dependency>
                 <groupId>com.microsoft.azure</groupId>
@@ -160,20 +202,52 @@
                     </exclusion>
                 </exclusions>
             </dependency>
+
+            <!-- spring-cloud dependency introduces 3.8.1 -->
+
             <dependency>
-                <groupId>com.microsoft.azure</groupId>
-                <artifactId>azure-client-runtime</artifactId>
-                <version>${azure.client.version}</version>
+                <groupId>com.azure</groupId>
+                <artifactId>azure-messaging-eventhubs</artifactId>
+                <version>${azure.eventhubs.version}</version>
             </dependency>
+
+            <!-- Contains Azure Storage Blobs checkpoint store when using EventProcessorClient -->
             <dependency>
-                <groupId>com.microsoft.azure</groupId>
-                <artifactId>azure-eventhubs-eph</artifactId>
-                <version>${azure.eventhubs.eph.version}</version>
+                <groupId>com.azure</groupId>
+                <artifactId>azure-messaging-eventhubs-checkpointstore-blob</artifactId>
+                <version>${azure.eventhubs.checkpoint.store.version}</version>
             </dependency>
+
+            <!-- Storage -->
+            <dependency>
+                <groupId>com.azure</groupId>
+                <artifactId>azure-storage-blob</artifactId>
+                <version>${azure.storage.blob.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.azure</groupId>
+                <artifactId>azure-storage-file-share</artifactId>
+                <version>${azure.storage.file.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.azure</groupId>
+                <artifactId>azure-storage-queue</artifactId>
+                <version>${azure.storage.queue.version}</version>
+            </dependency>
+
+
             <dependency>
                 <groupId>com.microsoft.azure</groupId>
                 <artifactId>azure-servicebus</artifactId>
                 <version>${azure.servicebus.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.slf4j</groupId>
+                        <artifactId>slf4j-log4j12</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
             <dependency>
                 <groupId>com.microsoft.azure</groupId>
@@ -250,11 +324,6 @@
                 <version>${powermock.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.projectlombok</groupId>
-                <artifactId>lombok</artifactId>
-                <version>${lombok.version}</version>
-            </dependency>
-            <dependency>
                 <groupId>commons-io</groupId>
                 <artifactId>commons-io</artifactId>
                 <version>${commons.io.version}</version>
@@ -264,18 +333,39 @@
                 <artifactId>hibernate-validator</artifactId>
                 <version>${hibernate.validator.version}</version>
             </dependency>
-            <!--Spring JMS-->
-            <dependency>
-                <groupId>org.springframework</groupId>
-                <artifactId>spring-jms</artifactId>
-                <version>${spring-jms.version}</version>
-            </dependency>
             <!--Qpid-->
             <dependency>
                 <groupId>org.apache.qpid</groupId>
                 <artifactId>qpid-jms-client</artifactId>
                 <version>${qpid-jms-client.version}</version>
             </dependency>
+			
+			<!--Azure SDK-->
+			<dependency>
+				<groupId>com.azure</groupId>
+				<artifactId>azure-core</artifactId>
+				<version>${azure-core.version}</version>
+			</dependency>
+            <dependency>
+                <groupId>com.azure</groupId>
+                <artifactId>azure-core-http-netty</artifactId>
+                <version>${azure-core-http-netty.version}</version>
+            </dependency>
+			<dependency>
+				<groupId>com.azure</groupId>
+				<artifactId>azure-data-appconfiguration</artifactId>
+				<version>${azure-data-appconfiguration.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.azure</groupId>
+				<artifactId>azure-identity</artifactId>
+				<version>${azure-identity.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.azure</groupId>
+				<artifactId>azure-security-keyvault-secrets</artifactId>
+				<version>${azure-security-keyvault-secrets.version}</version>
+			</dependency>
         </dependencies>
     </dependencyManagement>
 

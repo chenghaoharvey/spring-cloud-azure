@@ -10,12 +10,17 @@ import com.microsoft.azure.eventhub.stream.binder.properties.EventHubConsumerPro
 import com.microsoft.azure.eventhub.stream.binder.properties.EventHubExtendedBindingProperties;
 import com.microsoft.azure.eventhub.stream.binder.properties.EventHubProducerProperties;
 import com.microsoft.azure.eventhub.stream.binder.provisioning.EventHubChannelProvisioner;
-import com.microsoft.azure.spring.integration.core.DefaultMessageHandler;
 import com.microsoft.azure.spring.integration.core.api.CheckpointConfig;
 import com.microsoft.azure.spring.integration.core.api.StartPosition;
+import com.microsoft.azure.spring.integration.core.api.reactor.DefaultMessageHandler;
 import com.microsoft.azure.spring.integration.eventhub.api.EventHubOperation;
 import com.microsoft.azure.spring.integration.eventhub.inbound.EventHubInboundChannelAdapter;
-import org.springframework.cloud.stream.binder.*;
+import org.springframework.cloud.stream.binder.AbstractMessageChannelBinder;
+import org.springframework.cloud.stream.binder.BinderHeaders;
+import org.springframework.cloud.stream.binder.BinderSpecificPropertiesProvider;
+import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
+import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
+import org.springframework.cloud.stream.binder.ExtendedPropertiesBinder;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.cloud.stream.provisioning.ProducerDestination;
 import org.springframework.integration.core.MessageProducer;
@@ -52,6 +57,7 @@ public class EventHubMessageChannelBinder extends
         handler.setBeanFactory(getBeanFactory());
         handler.setSync(producerProperties.getExtension().isSync());
         handler.setSendTimeout(producerProperties.getExtension().getSendTimeout());
+        handler.setSendFailureChannel(errorChannel);
         if (producerProperties.isPartitioned()) {
             handler.setPartitionKeyExpressionString(
                     "'partitionKey-' + headers['" + BinderHeaders.PARTITION_HEADER + "']");
@@ -68,7 +74,9 @@ public class EventHubMessageChannelBinder extends
         this.eventHubOperation.setStartPosition(properties.getExtension().getStartPosition());
         CheckpointConfig checkpointConfig =
                 CheckpointConfig.builder().checkpointMode(properties.getExtension().getCheckpointMode())
-                                .checkpointCount(properties.getExtension().getCheckpointCount()).build();
+                                .checkpointCount(properties.getExtension().getCheckpointCount())
+                                .checkpointInterval(properties.getExtension().getCheckpointInterval())
+                                .build();
         this.eventHubOperation.setCheckpointConfig(checkpointConfig);
 
         boolean anonymous = !StringUtils.hasText(group);
@@ -79,6 +87,8 @@ public class EventHubMessageChannelBinder extends
         EventHubInboundChannelAdapter inboundAdapter =
                 new EventHubInboundChannelAdapter(destination.getName(), this.eventHubOperation, group);
         inboundAdapter.setBeanFactory(getBeanFactory());
+        ErrorInfrastructure errorInfrastructure = registerErrorInfrastructure(destination, group, properties);
+        inboundAdapter.setErrorChannel(errorInfrastructure.getErrorChannel());
         return inboundAdapter;
     }
 

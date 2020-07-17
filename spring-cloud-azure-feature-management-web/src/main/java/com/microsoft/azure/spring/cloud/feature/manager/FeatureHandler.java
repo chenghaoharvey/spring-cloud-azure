@@ -18,27 +18,27 @@ import org.springframework.util.ReflectionUtils;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.handler.HandlerInterceptorAdapter;
 
+import reactor.core.publisher.Mono;
+
 /**
  * Intercepter for Requests to check if they should be run.
  */
 @Component
 public class FeatureHandler extends HandlerInterceptorAdapter {
 
-    private static Logger logger = LoggerFactory.getLogger(FeatureHandler.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(FeatureHandler.class);
 
     private FeatureManager featureManager;
 
     private FeatureManagerSnapshot featureManagerSnapshot;
 
     private IDisabledFeaturesHandler disabledFeaturesHandler;
-    
-    private FeatureManagementConfigProperties properties;
-    
-    public FeatureHandler(FeatureManager featureManager, FeatureManagerSnapshot featureManagerSnapshot, 
-            FeatureManagementConfigProperties properties) {
+
+    public FeatureHandler(FeatureManager featureManager, FeatureManagerSnapshot featureManagerSnapshot,
+            IDisabledFeaturesHandler disabledFeaturesHandler) {
         this.featureManager = featureManager;
         this.featureManagerSnapshot = featureManagerSnapshot;
-        this.properties = properties;
+        this.disabledFeaturesHandler = disabledFeaturesHandler;
     }
 
     /**
@@ -60,29 +60,35 @@ public class FeatureHandler extends HandlerInterceptorAdapter {
             if (featureOn != null) {
                 String feature = featureOn.feature();
                 boolean snapshot = featureOn.snapshot();
-                boolean enabled = false;
+                Mono<Boolean> enabled;
 
                 if (!snapshot) {
-                    enabled = featureManager.isEnabled(feature);
+                    enabled = featureManager.isEnabledAsync(feature);
                 } else {
-                    enabled = featureManagerSnapshot.isEnabled(feature);
+                    enabled = featureManagerSnapshot.isEnabledAsync(feature);
                 }
+                boolean isEnabled = false;
+                try {
+                    isEnabled = enabled.block();
 
-                if (!enabled && !featureOn.fallback().isEmpty()) {
-                    try {
+                    if (!isEnabled && !featureOn.fallback().isEmpty()) {
                         response.sendRedirect(featureOn.fallback());
+                    }
+                } catch (IOException e) {
+                    LOGGER.info("Unable to send redirect.");
+                    ReflectionUtils.rethrowRuntimeException(e);
+                }
+                if (!isEnabled && disabledFeaturesHandler != null) {
+                    response = disabledFeaturesHandler.handleDisabledFeatures(request, response);
+                } else if (!isEnabled) {
+                    try {
+                        response.sendError(HttpServletResponse.SC_NOT_FOUND);
                     } catch (IOException e) {
-                        logger.info("Unable to send redirect.");
-                        if (properties.isFailFast()) {
-                            logger.error("Fail fast is set and there was an error redirecting to an endpoint.");
-                            ReflectionUtils.rethrowRuntimeException(e);
-                        }
+                        LOGGER.error("Error thrown while returning 404 on false feature.", e);
+                        return false;
                     }
                 }
-                if (!enabled && disabledFeaturesHandler != null) {
-                    response = disabledFeaturesHandler.handleDisabledFeatures(request, response);
-                }
-                return enabled;
+                return isEnabled;
             }
         }
         return true;

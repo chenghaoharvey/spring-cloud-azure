@@ -6,14 +6,14 @@
 
 package com.microsoft.azure.spring.cloud.autoconfigure.eventhub;
 
-import com.microsoft.azure.eventhubs.EventHubClient;
+import com.azure.messaging.eventhubs.EventHubConsumerAsyncClient;
 import com.microsoft.azure.management.eventhub.EventHubNamespace;
 import com.microsoft.azure.management.storage.StorageAccount;
 import com.microsoft.azure.spring.cloud.autoconfigure.context.AzureContextAutoConfiguration;
-import com.microsoft.azure.spring.cloud.autoconfigure.telemetry.TelemetryCollector;
 import com.microsoft.azure.spring.cloud.context.core.api.EnvironmentProvider;
 import com.microsoft.azure.spring.cloud.context.core.api.ResourceManagerProvider;
 import com.microsoft.azure.spring.cloud.context.core.storage.StorageConnectionStringProvider;
+import com.microsoft.azure.spring.cloud.telemetry.TelemetryCollector;
 import com.microsoft.azure.spring.integration.eventhub.api.EventHubClientFactory;
 import com.microsoft.azure.spring.integration.eventhub.api.EventHubOperation;
 import com.microsoft.azure.spring.integration.eventhub.factory.DefaultEventHubClientFactory;
@@ -39,7 +39,7 @@ import javax.annotation.PostConstruct;
  */
 @Configuration
 @AutoConfigureAfter(AzureContextAutoConfiguration.class)
-@ConditionalOnClass(EventHubClient.class)
+@ConditionalOnClass(EventHubConsumerAsyncClient.class)
 @ConditionalOnProperty(value = "spring.cloud.azure.eventhub.enabled", matchIfMissing = true)
 @EnableConfigurationProperties(AzureEventHubProperties.class)
 public class AzureEventHubAutoConfiguration {
@@ -97,6 +97,7 @@ public class AzureEventHubAutoConfiguration {
                             eventHubProperties.getCheckpointAccessKey(), environmentProvider.getEnvironment());
         }
 
-        return new DefaultEventHubClientFactory(connectionStringProvider, checkpointConnectionString);
+        return new DefaultEventHubClientFactory(connectionStringProvider, checkpointConnectionString,
+                eventHubProperties.getCheckpointContainer());
     }
 }

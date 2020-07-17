@@ -16,10 +16,13 @@ import org.springframework.expression.common.LiteralExpression;
 import org.springframework.integration.MessageTimeoutException;
 import org.springframework.integration.expression.ExpressionUtils;
 import org.springframework.integration.expression.ValueExpression;
-import org.springframework.integration.handler.AbstractMessageHandler;
+import org.springframework.integration.handler.AbstractMessageProducingHandler;
+import org.springframework.integration.support.DefaultErrorMessageStrategy;
+import org.springframework.integration.support.ErrorMessageStrategy;
 import org.springframework.lang.NonNull;
 import org.springframework.messaging.Message;
-import org.springframework.messaging.converter.MessageConverter;
+import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.MessageDeliveryException;
 import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 import org.springframework.util.concurrent.ListenableFutureCallback;
@@ -39,17 +42,19 @@ import java.util.concurrent.TimeoutException;
  *
  * @author Warren Zhu
  */
-public class DefaultMessageHandler extends AbstractMessageHandler {
+public class DefaultMessageHandler extends AbstractMessageProducingHandler {
     private static final Logger log = LoggerFactory.getLogger(DefaultMessageHandler.class);
     private static final long DEFAULT_SEND_TIMEOUT = 10000;
     private final String destination;
     private final SendOperation sendOperation;
-    protected MessageConverter messageConverter;
     private boolean sync = false;
     private ListenableFutureCallback<Void> sendCallback;
     private EvaluationContext evaluationContext;
     private Expression sendTimeoutExpression = new ValueExpression<>(DEFAULT_SEND_TIMEOUT);
+    private ErrorMessageStrategy errorMessageStrategy = new DefaultErrorMessageStrategy();
     private Expression partitionKeyExpression;
+    private MessageChannel sendFailureChannel;
+    private String sendFailureChannelName;
 
     public DefaultMessageHandler(String destination, @NonNull SendOperation sendOperation) {
         Assert.hasText(destination, "destination can't be null or empty");
@@ -66,7 +71,7 @@ public class DefaultMessageHandler extends AbstractMessageHandler {
 
     @Override
     @SuppressWarnings("unchecked")
-    protected void handleMessageInternal(Message<?> message) throws Exception {
+    protected void handleMessageInternal(Message<?> message) {
 
         PartitionSupplier partitionSupplier = toPartitionSupplier(message);
         String destination = toDestination(message);
@@ -89,6 +94,13 @@ public class DefaultMessageHandler extends AbstractMessageHandler {
                 if (this.sendCallback != null) {
                     this.sendCallback.onFailure(ex);
                 }
+
+                if (getSendFailureChannel() != null) {
+                    this.messagingTemplate.send(getSendFailureChannel(),
+                            getErrorMessageStrategy()
+                                    .buildErrorMessage(new AzureSendFailureException(message, ex), null));
+                }
+
             } else {
                 if (log.isDebugEnabled()) {
                     log.debug("{} sent successfully in async mode", message);
@@ -102,11 +114,14 @@ public class DefaultMessageHandler extends AbstractMessageHandler {
         });
     }
 
-    private void waitingSendResponse(CompletableFuture future, Message<?> message)
-            throws InterruptedException, ExecutionException {
+    private void waitingSendResponse(CompletableFuture future, Message<?> message) {
         Long sendTimeout = this.sendTimeoutExpression.getValue(this.evaluationContext, message, Long.class);
         if (sendTimeout < 0) {
-            future.get();
+            try {
+                future.get();
+            } catch (Exception e) {
+                throw new MessageDeliveryException(e.getMessage());
+            }
         } else {
             try {
                 future.get(sendTimeout, TimeUnit.MILLISECONDS);
@@ -115,6 +130,8 @@ public class DefaultMessageHandler extends AbstractMessageHandler {
                 }
             } catch (TimeoutException e) {
                 throw new MessageTimeoutException(message, "Timeout waiting for send event hub response", e);
+            } catch (Exception e) {
+                throw new MessageDeliveryException(e.getMessage());
             }
         }
     }
@@ -187,5 +204,33 @@ public class DefaultMessageHandler extends AbstractMessageHandler {
 
     public Expression getSendTimeoutExpression() {
         return sendTimeoutExpression;
+    }
+
+    public void setSendFailureChannel(MessageChannel sendFailureChannel) {
+        this.sendFailureChannel = sendFailureChannel;
+    }
+
+    protected MessageChannel getSendFailureChannel() {
+        if (this.sendFailureChannel != null) {
+            return this.sendFailureChannel;
+        } else if (this.sendFailureChannelName != null) {
+            this.sendFailureChannel = getChannelResolver().resolveDestination(this.sendFailureChannelName);
+            return this.sendFailureChannel;
+        }
+
+        return null;
+    }
+
+    public void setSendFailureChannelName(String sendFailureChannelName) {
+        this.sendFailureChannelName = sendFailureChannelName;
+    }
+
+    public void setErrorMessageStrategy(ErrorMessageStrategy errorMessageStrategy) {
+        Assert.notNull(errorMessageStrategy, "'errorMessageStrategy' must not be null");
+        this.errorMessageStrategy = errorMessageStrategy;
+    }
+
+    protected ErrorMessageStrategy getErrorMessageStrategy() {
+        return this.errorMessageStrategy;
     }
 }

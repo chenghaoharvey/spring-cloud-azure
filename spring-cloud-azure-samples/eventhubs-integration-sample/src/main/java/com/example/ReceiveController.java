@@ -9,12 +9,13 @@ package com.example;
 import com.microsoft.azure.spring.integration.core.AzureHeaders;
 import com.microsoft.azure.spring.integration.core.api.CheckpointConfig;
 import com.microsoft.azure.spring.integration.core.api.CheckpointMode;
-import com.microsoft.azure.spring.integration.core.api.Checkpointer;
+import com.microsoft.azure.spring.integration.core.api.reactor.Checkpointer;
 import com.microsoft.azure.spring.integration.eventhub.api.EventHubOperation;
 import com.microsoft.azure.spring.integration.eventhub.inbound.EventHubInboundChannelAdapter;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.integration.annotation.ServiceActivator;
+import org.springframework.integration.channel.DirectChannel;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.web.bind.annotation.RestController;
@@ -36,12 +37,10 @@ public class ReceiveController {
     public void messageReceiver(byte[] payload, @Header(AzureHeaders.CHECKPOINTER) Checkpointer checkpointer) {
         String message = new String(payload);
         System.out.println(String.format("New message received: '%s'", message));
-        checkpointer.success().handle((r, ex) -> {
-            if (ex == null) {
-                System.out.println(String.format("Message '%s' successfully checkpointed", message));
-            }
-            return null;
-        });
+        checkpointer.success()
+                .doOnSuccess(s -> System.out.println(String.format("Message '%s' successfully checkpointed", message)))
+                .doOnError(System.out::println)
+                .subscribe();
     }
 
     @Bean
@@ -52,5 +51,10 @@ public class ReceiveController {
                 eventhubOperation, CONSUMER_GROUP);
         adapter.setOutputChannel(inputChannel);
         return adapter;
+    }
+
+    @Bean
+    public MessageChannel input() {
+        return new DirectChannel();
     }
 }

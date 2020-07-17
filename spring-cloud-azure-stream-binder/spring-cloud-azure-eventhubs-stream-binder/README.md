@@ -8,7 +8,7 @@ microservice using **Spring Cloud Stream** based on [Azure Event Hub](https://az
 The Spring Cloud Stream Binder for Azure Event Hub provides the binding implementation for the Spring Cloud Stream.
 This implementation uses Spring Integration Event Hub Channel Adapters at its foundation. From design's perspective, 
 Event Hub is similar as Kafka. Also, Event Hub could be accessed via Kafka API. If your project has tight dependency 
-on Kafka API, you can try [Event Hub with Kafka API Sample](../spring-cloud-azure-samples/spring-cloud-azure-eventhub-kafka-sample/)
+on Kafka API, you can try [Event Hub with Kafka API Sample](../../spring-cloud-azure-samples/eventhubs-kafka-sample/)
 
 ### Consumer Group
 
@@ -32,6 +32,7 @@ Please use this [sample](../../spring-cloud-azure-samples/eventhubs-binder-sampl
 
 - [Dependency Management](#dependency-management)
 - [Configuration Options](#configuration-options)
+- [Error Channel](#error-channels)
 
 ### Dependency Management
 
@@ -119,3 +120,32 @@ Name | Description | Required | Default
   Effectively only when `checkpoint-mode` is `Time`. Decides The time interval to do one checkpoint.
 
   Default: `5s`
+
+### Error Channels
+**_consumer error channel_**
+
+this channel is open by default, you can handle the error message in this way:
+```
+    // Replace destination with spring.cloud.stream.bindings.input.destination
+    // Replace group with spring.cloud.stream.bindings.input.group
+    @ServiceActivator(inputChannel = "{destination}.{group}.errors")
+    public void consumerError(Message<?> message) {
+        System.out.println("Handling customer ERROR: " + message);
+    }
+```
+
+**_producer error channel_**
+
+this channel is not open by default, if you want to open it. You need to add a configuration in your application.properties, like this:
+```
+spring.cloud.stream.default.producer.errorChannelEnabled=true
+```
+
+you can handle the error message in this way:
+```
+    // Replace destination with spring.cloud.stream.bindings.output.destination
+    @ServiceActivator(inputChannel = "{destination}.errors")
+    public void producerError(Message<?> message) {
+        System.out.println("Handling Producer ERROR: " + message);
+    }
+```

@@ -5,9 +5,11 @@
  */
 package com.microsoft.azure.spring.cloud.config;
 
-import com.microsoft.azure.spring.cloud.config.domain.KeyValueItem;
-
 import java.util.List;
+
+import com.azure.data.appconfiguration.models.ConfigurationSetting;
+import com.microsoft.azure.spring.cloud.config.properties.AppConfigurationProperties;
+import com.microsoft.azure.spring.cloud.config.properties.ConfigStore;
 
 /**
  * Utility methods which can be used across different test classes
@@ -20,25 +22,26 @@ public class TestUtils {
         return String.format("%s=%s", propName, propValue);
     }
 
-    static KeyValueItem createItem(String context, String key, String value, String label) {
-        KeyValueItem item = new KeyValueItem();
+    static ConfigurationSetting createItem(String context, String key, String value, String label, String contentType) {
+        ConfigurationSetting item = new ConfigurationSetting();
         item.setKey(context + key);
         item.setValue(value);
         item.setLabel(label);
+        item.setContentType(contentType);
 
         return item;
     }
 
-    static void addStore(AzureCloudConfigProperties properties, String storeName, String connectionString) {
-        addStore(properties, storeName, connectionString, null);
+    static void addStore(AppConfigurationProperties properties, String storeEndpoint, String connectionString) {
+        addStore(properties, storeEndpoint, connectionString, null);
     }
 
-    static void addStore(AzureCloudConfigProperties properties, String storeName, String connectionString,
+    static void addStore(AppConfigurationProperties properties, String storeEndpoint, String connectionString,
                          String label) {
         List<ConfigStore> stores = properties.getStores();
         ConfigStore store = new ConfigStore();
         store.setConnectionString(connectionString);
-        store.setName(storeName);
+        store.setEndpoint(storeEndpoint);
         store.setLabel(label);
         stores.add(store);
         properties.setStores(stores);

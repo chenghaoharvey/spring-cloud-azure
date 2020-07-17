@@ -5,6 +5,7 @@
  */
 package com.microsoft.azure.spring.cloud.config.feature.management.entity;
 
+import java.util.HashMap;
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
@@ -14,54 +15,50 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Feature {
 
-    @JsonProperty("id")
-    private String id;
+    @JsonProperty("key")
+    private String key;
 
-    @JsonProperty("enabled")
-    private boolean enabled = true;
-
-    @JsonAlias("EnabledFor")
-    private List<FeatureFilterEvaluationContext> enabledFor;
-
-    /**
-     * @return the id
-     */
-    public String getId() {
-        return id;
+    @JsonAlias("enabled-for")
+    private HashMap<Integer, FeatureFilterEvaluationContext> enabledFor;
+    
+    public Feature() {}
+    
+    public Feature(String key, FeatureManagementItem featureItem) {
+        this.key = key;
+        List<FeatureFilterEvaluationContext> filterMapper = featureItem.getConditions().getClientFilters();
+        
+        enabledFor = new HashMap<Integer, FeatureFilterEvaluationContext>();
+        
+        for (int i = 0; i < filterMapper.size(); i++) {
+            enabledFor.put(i, filterMapper.get(i));
+        }
     }
 
     /**
-     * @param id the id to set
+     * @return the key
      */
-    public void setId(String id) {
-        this.id = id;
+    public String getKey() {
+        return key;
     }
 
     /**
-     * @return the enabled
+     * @param key the key to set
      */
-    public boolean getEnabled() {
-        return enabled;
-    }
-
-    /**
-     * @param enabled the enabled to set
-     */
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
+    public void setKey(String key) {
+        this.key = key;
     }
 
     /**
      * @return the enabledFor
      */
-    public List<FeatureFilterEvaluationContext> getEnabledFor() {
+    public HashMap<Integer, FeatureFilterEvaluationContext> getEnabledFor() {
         return enabledFor;
     }
 
     /**
      * @param enabledFor the enabledFor to set
      */
-    public void setEnabledFor(List<FeatureFilterEvaluationContext> enabledFor) {
+    public void setEnabledFor(HashMap<Integer, FeatureFilterEvaluationContext> enabledFor) {
         this.enabledFor = enabledFor;
     }
 

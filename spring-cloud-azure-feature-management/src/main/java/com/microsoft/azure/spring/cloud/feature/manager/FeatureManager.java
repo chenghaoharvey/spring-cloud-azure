@@ -5,7 +5,12 @@
  */
 package com.microsoft.azure.spring.cloud.feature.manager;
 
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,38 +21,40 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ReflectionUtils;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import com.microsoft.azure.spring.cloud.feature.manager.entities.Feature;
 import com.microsoft.azure.spring.cloud.feature.manager.entities.FeatureFilterEvaluationContext;
-import com.microsoft.azure.spring.cloud.feature.manager.entities.FeatureSet;
+
+import reactor.core.publisher.Mono;
 
 /**
  * Holds information on Feature Management properties and can check if a given feature is
  * enabled.
  */
-@Component("FeatureManager")
+@SuppressWarnings("serial")
+@Component("FeatureManagement")
 @ConfigurationProperties(prefix = "feature-management")
-public class FeatureManager {
+public class FeatureManager extends HashMap<String, Object> {
 
-    private static Logger logger = LoggerFactory.getLogger(FeatureManager.class);
-
-    private FeatureSet featureManagement;
-
-    // This is used to enable mapping both different types of read in.
-    @SuppressWarnings("unused")
-    @JsonProperty("featureSet")
-    private FeatureSet featureSet;
-
-    private ObjectMapper mapper = new ObjectMapper();
+    private static final Logger LOGGER = LoggerFactory.getLogger(FeatureManager.class);
 
     @Autowired
     private ApplicationContext context;
-    
+
     private FeatureManagementConfigProperties properties;
-    
+
+    private HashMap<String, Feature> featureManagement;
+
+    private HashMap<String, Boolean> onOff;
+
+    private ObjectMapper mapper = new ObjectMapper();
+
     public FeatureManager(FeatureManagementConfigProperties properties) {
         this.properties = properties;
+        featureManagement = new HashMap<String, Feature>();
+        onOff = new HashMap<String, Boolean>();
+        mapper.setPropertyNamingStrategy(PropertyNamingStrategy.KEBAB_CASE);
     }
 
     /**
@@ -58,65 +65,122 @@ public class FeatureManager {
      * 
      * @param feature Feature being checked.
      * @return state of the feature
+     * @throws FilterNotFoundException
      */
-    public boolean isEnabled(String feature) {
-        boolean enabled = false;
-        if (featureManagement == null || featureManagement.getFeatureManagement() == null || 
-                featureManagement.getOnOff() == null) {
+    public Mono<Boolean> isEnabledAsync(String feature) throws FilterNotFoundException {
+        return Mono.just(checkFeatures(feature));
+    }
+
+    private boolean checkFeatures(String feature) throws FilterNotFoundException {
+        if (featureManagement == null || onOff == null) {
             return false;
         }
 
-        Feature featureItem = featureManagement.getFeatureManagement().get(feature);
-        Boolean boolFeature = featureManagement.getOnOff().get(feature);
-        
+        Boolean boolFeature = onOff.get(feature);
+
         if (boolFeature != null) {
             return boolFeature;
-        } else if (featureItem == null) {
+        }
+
+        Feature featureItem = featureManagement.get(feature);
+        if (featureItem == null) {
             return false;
         }
-        
-        if (featureItem.getEnabled()) {
-            for (FeatureFilterEvaluationContext filter : featureItem.getEnabledFor()) {
-                if (filter != null && filter.getName() != null) {
-                    try {
-                        FeatureFilter featureFilter = (FeatureFilter) context.getBean(filter.getName());
-                        enabled = featureFilter.evaluate(filter);
-                    } catch (NoSuchBeanDefinitionException e) {
-                        logger.error("Was unable to find Filter " + filter.getName()
-                                + ". Does the class exist and set as an @Component?");
-                        if (properties.isFailFast()) {
-                            logger.error("Fail fast is set and a Filter was unable to be found.");
-                            ReflectionUtils.rethrowRuntimeException(e);
-                        }
+
+        return featureItem.getEnabledFor().values().stream().filter(Objects::nonNull)
+                .filter(featureFilter -> featureFilter.getName() != null)
+                .map(featureFilter -> isFeatureOn(featureFilter, feature)).findAny().orElse(false);
+    }
+
+    private boolean isFeatureOn(FeatureFilterEvaluationContext filter, String feature) {
+        try {
+            FeatureFilter featureFilter = (FeatureFilter) context.getBean(filter.getName());
+            filter.setFeatureName(feature);
+
+            return featureFilter.evaluate(filter);
+        } catch (NoSuchBeanDefinitionException e) {
+            LOGGER.error("Was unable to find Filter {}. Does the class exist and set as an @Component?",
+                    filter.getName());
+            if (properties.isFailFast()) {
+                String message = "Fail fast is set and a Filter was unable to be found";
+                ReflectionUtils.rethrowRuntimeException(new FilterNotFoundException(message, e, filter));
+            }
+        }
+        return false;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void addToFeatures(Map<? extends String, ? extends Object> features, String key, String combined) {
+        Object featureKey = features.get(key);
+        if (!combined.isEmpty() && !combined.endsWith(".")) {
+            combined += ".";
+        }
+        if (featureKey instanceof Boolean) {
+            onOff.put(combined + key, (Boolean) featureKey);
+        } else {
+            Feature feature = null;
+            try {
+                feature = mapper.convertValue(featureKey, Feature.class);
+            } catch (IllegalArgumentException e) {
+                LOGGER.error("Found invalid feature {} with value {}.", combined + key, featureKey.toString());
+            }
+
+            // When coming from a file "feature.flag" is not a possible flag name
+            if (feature != null && feature.getEnabledFor() == null && feature.getKey() == null) {
+                if (LinkedHashMap.class.isAssignableFrom(featureKey.getClass())) {
+                    features = (LinkedHashMap<String, Object>) featureKey;
+                    for (String fKey : features.keySet()) {
+                        addToFeatures(features, fKey, combined + key);
                     }
                 }
-                if (enabled) {
-                    return enabled;
+            } else {
+                if (feature != null) {
+                    feature.setKey(key);
+                    featureManagement.put(key, feature);
                 }
             }
         }
-        return enabled;
+    }
+
+    @Override
+    public void putAll(Map<? extends String, ? extends Object> m) {
+        if (m == null) {
+            return;
+        }
+
+        if (m.size() == 1 && m.containsKey("featureManagement")) {
+            m = (Map<? extends String, ? extends Object>) m.get("featureManagement");
+        }
+
+        for (String key : m.keySet()) {
+            addToFeatures(m, key, "");
+        }
+    }
+
+    /**
+     * Returns the names of all features flags
+     * @return a set of all feature names
+     */
+    public Set<String> getAllFeatureNames() {
+        Set<String> allFeatures = new HashSet<String>();
+
+        allFeatures.addAll(onOff.keySet());
+        allFeatures.addAll(featureManagement.keySet());
+        return allFeatures;
     }
 
     /**
      * @return the featureManagement
      */
-    public FeatureSet getFeatureManagement() {
+    HashMap<String, Feature> getFeatureManagement() {
         return featureManagement;
     }
 
     /**
-     * Converts LinkedHashMap to a Feature Set.
-     * @param featureSet the featureSet to set
+     * @return the onOff
      */
-    public void setFeatureManagement(LinkedHashMap<String, ?> featureSet) {
-        this.featureManagement = mapper.convertValue(featureSet, FeatureSet.class);
+    HashMap<String, Boolean> getOnOff() {
+        return onOff;
     }
 
-    /**
-     * @param featureSet the featureSet to set
-     */
-    public void setFeatureSet(FeatureSet featureSet) {
-        this.featureManagement = featureSet;
-    }
 }

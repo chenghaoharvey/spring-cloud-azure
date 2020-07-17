@@ -1,8 +1,13 @@
+/*
+ * Copyright (c) Microsoft Corporation. All rights reserved.
+ * Licensed under the MIT License. See LICENSE in the project root for
+ * license information.
+ */
 package com.example;
 
 import com.microsoft.azure.spring.integration.core.AzureHeaders;
 import com.microsoft.azure.spring.integration.core.api.CheckpointMode;
-import com.microsoft.azure.spring.integration.core.api.Checkpointer;
+import com.microsoft.azure.spring.integration.core.api.reactor.Checkpointer;
 import com.microsoft.azure.spring.integration.storage.queue.StorageQueueOperation;
 import com.microsoft.azure.spring.integration.storage.queue.inbound.StorageQueueMessageSource;
 import org.springframework.context.annotation.Bean;
@@ -24,7 +29,7 @@ public class ReceiveController {
 
     @Bean
     @InboundChannelAdapter(channel = INPUT_CHANNEL, poller = @Poller(fixedDelay = "1000"))
-    public StorageQueueMessageSource StorageQueueMessageSource(StorageQueueOperation storageQueueOperation) {
+    public StorageQueueMessageSource storageQueueMessageSource(StorageQueueOperation storageQueueOperation) {
         storageQueueOperation.setCheckpointMode(CheckpointMode.MANUAL);
         storageQueueOperation.setVisibilityTimeoutInSeconds(10);
 
@@ -41,11 +46,10 @@ public class ReceiveController {
     public void messageReceiver(byte[] payload, @Header(AzureHeaders.CHECKPOINTER) Checkpointer checkpointer) {
         String message = new String(payload);
         System.out.println(String.format("New message received: '%s'", message));
-        checkpointer.success().handle((r, ex) -> {
-            if (ex == null) {
-                System.out.println(String.format("Message '%s' successfully checkpointed", message));
-            }
-            return null;
-        });
+        checkpointer.success()
+                .doOnError(Throwable::printStackTrace)
+                .doOnSuccess(t -> System.out.println(String.format("Message '%s' successfully checkpointed", message)))
+                .subscribe();
+
     }
 }
