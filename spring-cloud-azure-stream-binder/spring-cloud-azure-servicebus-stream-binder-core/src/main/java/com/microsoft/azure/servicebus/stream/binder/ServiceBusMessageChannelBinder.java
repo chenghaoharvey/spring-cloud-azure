@@ -17,6 +17,8 @@ import com.microsoft.azure.spring.integration.servicebus.ServiceBusClientConfig;
 import org.springframework.cloud.stream.binder.*;
 import org.springframework.cloud.stream.provisioning.ProducerDestination;
 import org.springframework.integration.expression.FunctionExpression;
+import org.springframework.integration.support.DefaultErrorMessageStrategy;
+import org.springframework.integration.support.ErrorMessageStrategy;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
@@ -33,6 +35,10 @@ public abstract class ServiceBusMessageChannelBinder<T extends ServiceBusExtende
         ExtendedPropertiesBinder<MessageChannel, ServiceBusConsumerProperties, ServiceBusProducerProperties> {
 
     protected T bindingProperties;
+
+    private static final DefaultErrorMessageStrategy defaultErrorMessageStrategy = new DefaultErrorMessageStrategy();
+
+    protected static final String EXCEPTION_MESSAGE = "exception-message";
 
     public ServiceBusMessageChannelBinder(String[] headersToEmbed, ServiceBusChannelProvisioner provisioningProvider) {
         super(headersToEmbed, provisioningProvider);
@@ -76,6 +82,11 @@ public abstract class ServiceBusMessageChannelBinder<T extends ServiceBusExtende
         return this.bindingProperties.getExtendedPropertiesEntryClass();
     }
 
+    @Override
+    protected ErrorMessageStrategy getErrorMessageStrategy() {
+        return defaultErrorMessageStrategy;
+    }
+
     public void setBindingProperties(T bindingProperties) {
         this.bindingProperties = bindingProperties;
     }
@@ -94,4 +105,5 @@ public abstract class ServiceBusMessageChannelBinder<T extends ServiceBusExtende
     }
 
     abstract SendOperation getSendOperation();
+
 }

@@ -7,10 +7,7 @@
 package com.microsoft.azure.spring.integration.servicebus.queue;
 
 import com.google.common.collect.Sets;
-import com.microsoft.azure.servicebus.IMessage;
-import com.microsoft.azure.servicebus.IMessageSession;
-import com.microsoft.azure.servicebus.IQueueClient;
-import com.microsoft.azure.servicebus.ISessionHandler;
+import com.microsoft.azure.servicebus.*;
 import com.microsoft.azure.servicebus.primitives.ServiceBusException;
 import com.microsoft.azure.spring.integration.core.AzureCheckpointer;
 import com.microsoft.azure.spring.integration.core.AzureHeaders;
@@ -58,7 +55,7 @@ public class ServiceBusQueueTemplate extends ServiceBusTemplate<ServiceBusQueueC
     @Override
     @SuppressWarnings("unchecked")
     public boolean subscribe(String destination, @NonNull Consumer<Message<?>> consumer,
-            @NonNull Class<?> targetPayloadClass) {
+                             @NonNull Class<?> targetPayloadClass) {
         Assert.hasText(destination, "destination can't be null or empty");
 
         if (subscribedQueues.contains(destination)) {
@@ -78,6 +75,49 @@ public class ServiceBusQueueTemplate extends ServiceBusTemplate<ServiceBusQueueC
         // TODO: unregister message handler but service bus sdk unsupported
 
         return subscribedQueues.remove(destination);
+    }
+
+    @Override
+    public <T> void deadLetter(String destination, Message<T> message, String deadLetterReason,
+                               String deadLetterErrorDescription) {
+        Assert.hasText(destination, "destination can't be null or empty");
+        IQueueClient queueClient = this.senderFactory.getOrCreateClient(destination);
+        IMessage serviceBusMessage = messageConverter.fromMessage(message, IMessage.class);
+        UUID uuid = UUID.fromString(message.getHeaders().get(AzureHeaders.LOCK_TOKEN).toString());
+
+        try {
+            if (!clientConfig.isSessionsEnabled()) {
+                queueClient.deadLetter(uuid, deadLetterReason, deadLetterErrorDescription);
+            } else {
+                IMessageSession session = (IMessageSession) message.getHeaders().get(AzureHeaders.MESSAGE_SESSION);
+                Assert.notNull(session, "IMessageSession cannot be null");
+                session.deadLetter(uuid, deadLetterReason, deadLetterErrorDescription);
+            }
+        } catch (ServiceBusException | InterruptedException e) {
+            log.error("Failed to register queue message handler", e);
+            throw new ServiceBusRuntimeException("Failed to register queue message handler", e);
+        }
+    }
+
+    @Override
+    public <T> void abandon(String destination, Message<T> message) {
+        Assert.hasText(destination, "destination can't be null or empty");
+        IQueueClient queueClient = this.senderFactory.getOrCreateClient(destination);
+        IMessage serviceBusMessage = messageConverter.fromMessage(message, IMessage.class);
+        UUID uuid = UUID.fromString(message.getHeaders().get(AzureHeaders.LOCK_TOKEN).toString());
+
+        try {
+            if (!clientConfig.isSessionsEnabled()) {
+                queueClient.abandon(uuid);
+            } else {
+                IMessageSession session = (IMessageSession) message.getHeaders().get(AzureHeaders.MESSAGE_SESSION);
+                Assert.notNull(session, "IMessageSession cannot be null");
+                session.abandon(uuid);
+            }
+        } catch (ServiceBusException | InterruptedException e) {
+            log.error("Failed to register queue message handler", e);
+            throw new ServiceBusRuntimeException("Failed to register queue message handler", e);
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -145,10 +185,13 @@ public class ServiceBusQueueTemplate extends ServiceBusTemplate<ServiceBusQueueC
         @Override
         public CompletableFuture<Void> onMessageAsync(IMessageSession session, IMessage serviceBusMessage) {
             Map<String, Object> headers = new HashMap<>();
+            headers.put(AzureHeaders.LOCK_TOKEN, serviceBusMessage.getLockToken());
+            headers.put(AzureHeaders.MESSAGE_SESSION, session);
 
             Checkpointer checkpointer = new AzureCheckpointer(
                     () -> session.completeAsync(serviceBusMessage.getLockToken()),
                     () -> session.abandonAsync(serviceBusMessage.getLockToken()));
+
             if (checkpointConfig.getCheckpointMode() == CheckpointMode.MANUAL) {
                 headers.put(AzureHeaders.CHECKPOINTER, checkpointer);
             }
